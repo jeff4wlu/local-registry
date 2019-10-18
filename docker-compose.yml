@@ -1,0 +1,59 @@
+
+
+version: '3'
+
+services:
+  registry:
+    image: registry:2
+    container_name: registry
+    ports:
+    - "5000:5000"
+    environment:
+      REGISTRY_AUTH: htpasswd
+      REGISTRY_AUTH_HTPASSWD_REALM: Registry
+      REGISTRY_AUTH_HTPASSWD_PATH: /auth/registry.password
+      REGISTRY_STORAGE_DELETE_ENABLED: 'true'
+      REGISTRY_HTTP_ADDR: 0.0.0.0:5000
+      REGISTRY_HTTP_TLS_CERTIFICATE: /certs/registry-selfsigned.crt
+      REGISTRY_HTTP_TLS_KEY: /certs/registry-selfsigned.key
+      REGISTRY_STORAGE_FILESYSTEM_ROOTDIRECTORY: /data
+    command: >
+      sh -c "echo 'http://mirrors.ustc.edu.cn/alpine/v3.5/main' > /etc/apk/repositories &&
+         echo 'http://mirrors.ustc.edu.cn/alpine/v3.5/community' >>/etc/apk/repositories &&
+         apk update && apk add tzdata &&
+         ln -sf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime &&
+         echo "Asia/Shanghai" > /etc/timezone &&
+         exec /entrypoint.sh /etc/docker/registry/config.yml"
+    volumes:
+      - ./auth:/auth
+      - ./data:/data
+      - ./certs:/certs
+    networks: 
+      - registry-net
+    #restart: always
+
+  registry-frontend:
+    image: konradkleine/docker-registry-frontend:v2
+    container_name: registry-frontend
+    environment:
+      # The front-end is SSL protected
+      ENV_USE_SSL: 'yes'
+      ENV_DOCKER_REGISTRY_HOST: registry
+      ENV_DOCKER_REGISTRY_PORT: 5000
+      # The registry is SSL protected as well
+      ENV_DOCKER_REGISTRY_USE_SSL: '1'
+      TZ: Asia/Shanghai
+    volumes:
+      - ./frontend/certs/frontend.crt:/etc/apache2/server.crt:ro
+      - ./frontend/certs/frontend.key:/etc/apache2/server.key:ro
+    depends_on:
+      - registry
+    networks: 
+      - registry-net
+    #restart: always
+    ports:
+      - "443:443"
+
+networks:
+  registry-net:
+
